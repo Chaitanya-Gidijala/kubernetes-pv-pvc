@@ -1,0 +1,105 @@
+# Kubernetes Persistent Volumes (PV) and Persistent Volume Claims (PVC)
+
+This guide explains how to use Persistent Volumes (PVs) and Persistent Volume Claims (PVCs) in Kubernetes to provide persistent storage for your applications.
+
+## 1. What are Persistent Volumes (PVs)?
+
+A `PersistentVolume` (PV) is a piece of storage in the cluster that has been provisioned by an administrator or dynamically provisioned using Storage Classes. It is a resource in the cluster, much like a node is a cluster resource. PVs are independent of the lifecycle of individual pods. This means that even if a pod that was using a PV is deleted, the data on the PV remains intact.
+
+In our `pv.yaml`:
+- `apiVersion: v1`: Specifies the Kubernetes API version.
+- `kind: PersistentVolume`: Declares this resource as a PersistentVolume.
+- `metadata.name: image-pv`: The name of our PersistentVolume.
+- `spec.capacity.storage: 1Gi`: Defines the size of the volume (1 Gigabyte).
+- `spec.accessModes: - ReadWriteOnce`: Specifies that the volume can be mounted as read-write by a single node. Other modes include `ReadOnlyMany` (read-only by many nodes) and `ReadWriteMany` (read-write by many nodes).
+- `spec.persistentVolumeReclaimPolicy: Retain`: What happens to the volume after the PVC is deleted. `Retain` means the volume is kept and requires manual cleanup. Other policies include `Delete` (deletes the volume) and `Recycle` (wipes the data and makes it available for a new claim).
+- `spec.hostPath.path: "/mnt/data/image-uploads"`: This specifies a `hostPath` volume. In a production environment, you would typically use network storage solutions like NFS, AWS EBS, GCE Persistent Disks, Azure Disks, etc. For this demo, `hostPath` is used, which means the volume is mounted from a directory on the host node's filesystem. This path must exist on your Kubernetes node.
+
+## 2. What are Persistent Volume Claims (PVCs)?
+
+A `PersistentVolumeClaim` (PVC) is a request for storage by a user. It is similar to a pod requesting CPU and memory resources. PVCs consume PV resources. The claim specifies the amount of storage and the access mode required. Kubernetes then binds the PVC to an available PV that satisfies the requirements.
+
+In our `pvc.yaml`:
+- `apiVersion: v1`: Specifies the Kubernetes API version.
+- `kind: PersistentVolumeClaim`: Declares this resource as a PersistentVolumeClaim.
+- `metadata.name: image-pvc`: The name of our PersistentVolumeClaim.
+- `spec.accessModes: - ReadWriteOnce`: Requests the same access mode as defined in the PV. This must match or be a subset of the PV's access modes.
+- `spec.resources.requests.storage: 1Gi`: Requests 1 Gigabyte of storage.
+
+## 3. How they work together (PV, PVC, and Deployment)
+
+1.  **PV Creation**: An administrator (or a Storage Class) provisions a PersistentVolume.
+2.  **PVC Creation**: A user creates a PersistentVolumeClaim, requesting a certain amount of storage and access mode.
+3.  **Binding**: Kubernetes finds a suitable PV that matches the PVC's requirements and binds them together. The PVC is now "bound" to that PV.
+4.  **Pod/Deployment Usage**: A Pod (or Deployment, which manages pods) can then use the PVC by referencing its name in its `volumes` section and mounting it into a container's filesystem using `volumeMounts`.
+
+In our `deployment.yaml`:
+- `spec.template.spec.volumes`: Defines a volume named `image-storage` that uses the `persistentVolumeClaim` named `image-pvc`.
+- `spec.template.spec.containers.volumeMounts`: Mounts the `image-storage` volume into the `/app/uploads` directory inside the container. This means any data written to `/app/uploads` within the container will be stored persistently on the bound PV.
+
+## 4. Practice Commands
+
+Here's a list of commands to help you practice and understand PV/PVCs:
+
+1.  **Apply the Persistent Volume**:
+    ```bash
+    kubectl apply -f pv.yaml
+    ```
+2.  **Verify the Persistent Volume**:
+    ```bash
+    kubectl get pv
+    ```
+    You should see `image-pv` with a status of `Available`.
+
+3.  **Apply the Persistent Volume Claim**:
+    ```bash
+    kubectl apply -f pvc.yaml
+    ```
+4.  **Verify the Persistent Volume Claim**:
+    ```bash
+    kubectl get pvc
+    ```
+    You should see `image-pvc` with a status of `Pending` initially, then `Bound` once it's matched with `image-pv`.
+
+5.  **Apply the Deployment**:
+    ```bash
+    kubectl apply -f deployment.yaml
+    ```
+6.  **Verify the Deployment and Pods**:
+    ```bash
+    kubectl get deployment
+    kubectl get pods
+    ```
+7.  **Access the application (if you have a service or ingress set up)**:
+    (Assuming your service is named `image-uploader-service` and type NodePort, get the node IP and NodePort)
+    ```bash
+    kubectl get svc
+    ```
+    Then, access `http://<NodeIP>:<NodePort>` in your browser. Upload an image.
+
+8.  **Verify data persistence**:
+    - Delete the deployment:
+      ```bash
+      kubectl delete -f deployment.yaml
+      ```
+    - Check the contents of `/mnt/data/image-uploads` on your Kubernetes node. The uploaded image should still be there.
+    - Re-apply the deployment:
+      ```bash
+      kubectl apply -f deployment.yaml
+      ```
+    - Access the application again. The previously uploaded image should be visible.
+
+9.  **Clean up**:
+    - Delete the Deployment:
+      ```bash
+      kubectl delete -f deployment.yaml
+      ```
+    - Delete the Persistent Volume Claim:
+      ```bash
+      kubectl delete -f pvc.yaml
+      ```
+    - Delete the Persistent Volume (since `reclaimPolicy` is `Retain`, the actual hostPath directory content remains):
+      ```bash
+      kubectl delete -f pv.yaml
+      ```
+    - Manually clean up the `/mnt/data/image-uploads` directory on your node if you wish to remove the data completely.

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Uploader</title>
+    <style>
+/* Basic Styles */
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background: #f4f4f4;
+    color: #333;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+    overflow: hidden;
+    padding: 20px 0;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    margin-top: 50px;
+    text-align: center;
+}
+
+h1, h2 {
+    color: #333;
+}
+
+form {
+    margin-bottom: 20px;
+}
+
+input[type="file"] {
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+button[type="submit"] {
+    background-color: #5cb85c;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button[type="submit"]:hover {
+    background-color: #4cae4c;
+}
+
+#message {
+    margin-top: 10px;
+    color: green;
+    font-weight: bold;
+}
+
+#imagesContainer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+#imagesContainer img {
+    max-width: 200px;
+    margin: 10px;
+    border: 1px solid #ddd;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Your Image</h1>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="image" accept="image/*" required>
+            <button type="submit">Upload Image</button>
+        </form>
+        <div id="message"></div>
+        <h2>Uploaded Images</h2>
+        <div id="imagesContainer"></div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const messageDiv = document.getElementById('message');
+        const imagesContainer = document.getElementById('imagesContainer');
+
+        uploadForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(uploadForm);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                messageDiv.textContent = result.message;
+                fetchImages(); // Refresh images after upload
+            } catch (error) {
+                console.error('Error:', error);
+                messageDiv.textContent = 'Error uploading image.';
+            }
+        });
+
+        async function fetchImages() {
+            try {
+                const response = await fetch('/images');
+                const images = await response.json();
+                console.log('Fetched images:', images); // Added for debugging
+                imagesContainer.innerHTML = '';
+                if (images.length === 0) {
+                    imagesContainer.textContent = 'No images uploaded yet.';
+                } else {
+                    images.forEach(image => {
+                        console.log('Processing image:', image); // Added for debugging
+                        const imgElement = document.createElement('img');
+                        imgElement.src = `/uploads/${image}`;
+                        imgElement.alt = image;
+                        imgElement.style.maxWidth = '200px';
+                        imgElement.style.margin = '10px';
+                        imagesContainer.appendChild(imgElement);
+                    });
+                }
+            } catch (error) {
+                console.error('Error fetching images:', error);
+                imagesContainer.textContent = 'Error fetching images.';
+            }
+        }
+
+        fetchImages(); // Fetch images on page load
+    </script>
+</body>
+</html>
